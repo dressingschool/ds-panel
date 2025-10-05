@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add JSON Data</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0px 2px 6px rgba(0,0,0,0.2);
+      margin: auto;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    textarea {
+      height: 200px;
+      font-family: monospace;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .message {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<header>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="images.html">Images</a></li>
+                <li><a href="add-category.html">Add Category</a></li>
+                <li><a href="add-json.html">Add JSON</a></li>
+                <li><a href="edit-image.html">Edit Image</a></li>
+                <li><a href="aicards.html">AI Cards</a></li>
+                <li><a href="recreatoutfit.html">Recreate Outfit</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+<body>
+  <div class="container">
+    <h2>Add JSON Data to Firestore</h2>
+
+    <input type="text" id="collection" placeholder="Collection Name (required)" required />
+    <input type="text" id="docId" placeholder="Document ID (optional)" />
+
+    <textarea id="jsonData" placeholder='Enter JSON here... Example: {"name":"John","age":25}' required></textarea>
+
+    <button onclick="submitData()">Submit</button>
+    <p class="message" id="message"></p>
+  </div>
+
+  <script>
+    async function submitData() {
+      const collection = document.getElementById("collection").value.trim();
+      const docId = document.getElementById("docId").value.trim();
+      const rawJson = document.getElementById("jsonData").value.trim();
+      const message = document.getElementById("message");
+
+      if (!collection || !rawJson) {
+        message.textContent = "⚠️ Collection name and JSON data are required!";
+        return;
+      }
+
+      let jsonData;
+      try {
+        jsonData = JSON.parse(rawJson);
+      } catch (e) {
+        message.textContent = "❌ Invalid JSON format!";
+        return;
+      }
+
+      try {
+        const response = await fetch("http://localhost:4000/addJsonData", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collection, docId, data: jsonData }),
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          message.textContent = `✅ Data added to '${collection}' with Document ID: ${result.id}`;
+        } else {
+          message.textContent = "❌ Error: " + result.error;
+        }
+      } catch (err) {
+        message.textContent = "⚠️ Failed to connect to server.";
+      }
+    }
+  </script>
+</body>
+</html>

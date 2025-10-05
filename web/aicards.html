@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Cards Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0f172a;--panel:#0b1223;--muted:#94a3b8;--text:#e2e8f0;--border:#1e293b;
+      --accent:#22c55e;--primary:#3b82f6;--danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    header{padding:16px;border-bottom:1px solid var(--border)}
+    h1{margin:0;font-size:20px}
+    main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:20px}
+
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .grow{flex:1}
+    input,select,textarea{
+      width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);
+      background:#0a1020;color:var(--text);font-size:14px
+    }
+    textarea{min-height:72px}
+    label{font-size:12px;color:var(--muted)}
+    .btn{padding:10px 12px;border:none;border-radius:10px;cursor:pointer}
+    .btn.primary{background:var(--primary);color:#fff}
+    .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+    .btn.danger{background:var(--danger);color:#fff}
+    .status{font-size:13px;color:var(--muted)}
+
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+    th{color:var(--muted);font-weight:600;font-size:13px}
+    td small{color:var(--muted)}
+    .thumb{width:76px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--border);background:#050a18}
+    .actions button{margin-right:6px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  </style>
+</head>
+<body>
+ <header>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="images.html">Images</a></li>
+                <li><a href="add-category.html">Add Category</a></li>
+                <li><a href="add-json.html">Add JSON</a></li>
+                <li><a href="edit-image.html">Edit Image</a></li>
+                <li><a href="aicards.html">AI Cards</a></li>
+                <li><a href="recreatoutfit.html">Recreate Outfit</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+  <main>
+    <!-- Add / Edit form -->
+    <section class="card">
+      <h2 id="formTitle" style="margin-top:0">Add Card</h2>
+      <form id="cardForm">
+        <input type="hidden" id="cardId" />
+        <div class="row">
+          <div class="grow">
+            <label>Title</label>
+            <input id="title" required placeholder="Urban Street Look" />
+          </div>
+          <div style="width:220px">
+            <label>Category</label>
+            <input id="category" required placeholder="male / female / casual…" />
+          </div>
+          <div style="width:160px">
+            <label>Gender</label>
+            <select id="gender">
+              <option>Unisex</option>
+              <option>Male</option>
+              <option>Female</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="grow">
+            <label>Image URL</label>
+            <input id="image" required placeholder="https://…" />
+          </div>
+          <div class="grow">
+            <label>Link</label>
+            <input id="link" placeholder="https://gemini.google.com/" />
+          </div>
+        </div>
+        <div class="row">
+          <div class="grow">
+            <label>Prompt</label>
+            <textarea id="prompt" placeholder="Create a trendy urban streetwear look…"></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <button type="submit" class="btn primary">Save</button>
+          <button type="button" id="cancelEdit" class="btn ghost" style="display:none">Cancel</button>
+          <span id="formStatus" class="status"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- List/Search -->
+    <section class="card">
+      <div class="toolbar">
+        <input id="search" placeholder="Search by title…" class="grow" />
+        <button id="refresh" class="btn ghost">Refresh</button>
+        <span id="status" class="status"></span>
+      </div>
+
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:76px">Image</th>
+              <th>Title & Prompt</th>
+              <th>Meta</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API = '/api/aicards';
+
+    const els = {
+      form: document.getElementById('cardForm'),
+      formTitle: document.getElementById('formTitle'),
+      formStatus: document.getElementById('formStatus'),
+      id: document.getElementById('cardId'),
+      title: document.getElementById('title'),
+      image: document.getElementById('image'),
+      prompt: document.getElementById('prompt'),
+      link: document.getElementById('link'),
+      gender: document.getElementById('gender'),
+      category: document.getElementById('category'),
+      cancelEdit: document.getElementById('cancelEdit'),
+
+      search: document.getElementById('search'),
+      refresh: document.getElementById('refresh'),
+      status: document.getElementById('status'),
+      rows: document.getElementById('rows'),
+    };
+
+    let all = [];
+    let filtered = [];
+
+    function setStatus(msg, error = false){
+      els.status.textContent = msg || '';
+      els.status.style.color = error ? '#ef4444' : '#94a3b8';
+    }
+    function setFormStatus(msg, error = false){
+      els.formStatus.textContent = msg || '';
+      els.formStatus.style.color = error ? '#ef4444' : '#94a3b8';
+    }
+
+    function escape(s){ return String(s ?? '')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#039;'); }
+
+    function fmtDate(iso){
+      if (!iso) return '-';
+      const d = new Date(iso);
+      if (isNaN(d)) return '-';
+      return d.toLocaleString();
+    }
+
+    async function load(){
+      setStatus('Loading…');
+      try{
+        const res = await fetch(API);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        all = await res.json();           // server returns array
+        applyFilter();
+        setStatus(`Loaded ${all.length} cards`);
+      }catch(e){
+        console.error(e);
+        setStatus('Failed to load', true);
+        all = []; filtered = []; renderRows();
+      }
+    }
+
+    function applyFilter(){
+      const q = els.search.value.trim().toLowerCase();
+      filtered = all.filter(c => !q || (c.title||'').toLowerCase().includes(q));
+      renderRows();
+    }
+
+    function renderRows(){
+      els.rows.innerHTML = '';
+      filtered.forEach(c=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><img class="thumb" src="${escape(c.image)}" alt=""></td>
+          <td>
+            <div><strong>${escape(c.title || '(no title)')}</strong></div>
+            <small>${escape((c.prompt || '').slice(0,120))}${(c.prompt||'').length>120?'…':''}</small>
+          </td>
+          <td>
+            <div><small>Category:</small> ${escape(c.category || '')}</div>
+            <div><small>Gender:</small> ${escape(c.gender || 'Unisex')}</div>
+            <div><small>Link:</small> ${c.link ? `<a href="${escape(c.link)}" target="_blank" rel="noopener">open</a>` : '-'}</div>
+          </td>
+          <td>${fmtDate(c.createdAt)}</td>
+          <td class="actions">
+            <button class="btn ghost" data-edit="${c.id}">Edit</button>
+            <button class="btn danger" data-del="${c.id}">Delete</button>
+          </td>
+        `;
+        els.rows.appendChild(tr);
+      });
+
+      // wire actions
+      els.rows.querySelectorAll('[data-edit]').forEach(b=>{
+        b.onclick = ()=> startEdit(b.dataset.edit);
+      });
+      els.rows.querySelectorAll('[data-del]').forEach(b=>{
+        b.onclick = ()=> delCard(b.dataset.del);
+      });
+    }
+
+    function startEdit(id){
+      const c = all.find(x=>x.id===id);
+      if (!c) return;
+      els.formTitle.textContent = 'Edit Card';
+      els.id.value = c.id;
+      els.title.value = c.title || '';
+      els.image.value = c.image || '';
+      els.prompt.value = c.prompt || '';
+      els.link.value = c.link || '';
+      els.gender.value = c.gender || 'Unisex';
+      els.category.value = c.category || '';
+      els.cancelEdit.style.display = 'inline-block';
+      setFormStatus('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    els.cancelEdit.onclick = ()=>{
+      els.form.reset();
+      els.id.value = '';
+      els.formTitle.textContent = 'Add Card';
+      els.cancelEdit.style.display = 'none';
+      setFormStatus('');
+    };
+
+    els.form.onsubmit = async (e)=>{
+      e.preventDefault();
+      const payload = {
+        title: els.title.value.trim(),
+        image: els.image.value.trim(),
+        prompt: els.prompt.value.trim(),
+        link: els.link.value.trim(),
+        gender: els.gender.value,
+        category: els.category.value.trim(),
+      };
+      if (!payload.title || !payload.category){
+        setFormStatus('Title and Category are required', true);
+        return;
+      }
+
+      try{
+        if (els.id.value){
+          // update
+          const res = await fetch(`${API}/${els.id.value}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Update failed');
+          setFormStatus('Updated ✔');
+        }else{
+          // create
+          const res = await fetch(API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Create failed');
+          setFormStatus('Created ✔');
+        }
+        els.form.reset();
+        els.id.value = '';
+        els.formTitle.textContent = 'Add Card';
+        els.cancelEdit.style.display = 'none';
+        await load();
+      }catch(err){
+        console.error(err);
+        setFormStatus('Save failed', true);
+      }
+    };
+
+    async function delCard(id){
+      if (!confirm('Delete this card?')) return;
+      try{
+        const res = await fetch(`${API}/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        setStatus('Deleted ✔');
+        await load();
+      }catch(err){
+        console.error(err);
+        setStatus('Delete failed', true);
+      }
+    }
+
+    // events
+    els.refresh.onclick = load;
+    els.search.oninput = applyFilter;
+
+    // init
+    load();
+  </script>
+</body>
+</html>

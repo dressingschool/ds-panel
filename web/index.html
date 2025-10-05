@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Recent Items — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; --accent:#22d3ee; --accent2:#60a5fa; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+  header{padding:18px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b1220,#0f172a 40%,#111827)}
+  h1{margin:0}
+  .container{padding:18px 20px;max-width:1200px;margin:0 auto}
+  .controls{display:grid;grid-template-columns:1fr 160px 140px auto auto auto;gap:10px;margin:12px 0}
+  input,select,button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1020;color:#e5e7eb}
+  .primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#001018;font-weight:700}
+  .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:top}
+  thead{background:rgba(255,255,255,.03)}
+  .thumb{width:54px;height:72px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+  .pill{padding:4px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px;margin:2px 4px 0 0}
+  .btn{padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#0b1020;color:#fff;cursor:pointer;margin-right:8px;text-decoration:none;display:inline-block}
+  .danger{background:#2b0e10;border-color:#3b0f12;color:#fecaca}
+  .muted{color:var(--muted)}
+  #debug{white-space:pre;font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px dashed var(--border);padding:10px;border-radius:10px}
+</style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="images.html">Images</a></li>
+                <li><a href="add-category.html">Add Category</a></li>
+                <li><a href="add-json.html">Add JSON</a></li>
+                <li><a href="edit-image.html">Edit Image</a></li>
+                <li><a href="aicards.html">AI Cards</a></li>
+                <li><a href="recreatoutfit.html">Recreate Outfit</a></li>
+            </ul>
+        </nav>
+    </div>
+</header><div class="container">
+  <div class="controls">
+    <input id="search" placeholder="Search title/desc/tags…"/>
+    <select id="category">
+      <option value="">All Categories</option>
+      <option value="recent">recent</option>
+      <option value="Exam">Exam</option>
+    </select>
+    <select id="saved">
+      <option value="">Saved: Any</option>
+      <option value="true">Saved: Yes</option>
+      <option value="false">Saved: No</option>
+    </select>
+    <button id="btnFetch" class="primary">Search</button>
+    <button id="btnClear">Clear filters + Reload</button>
+    <button id="btnAdd">+ Add</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:70px">Thumb</th>
+          <th>Title & Description</th>
+          <th>Category</th>
+          <th>Tags</th>
+          <th>Saved</th>
+          <th>Created</th>
+          <th style="width:230px">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="muted" id="status" style="margin-top:6px">Ready.</div>
+
+  <details style="margin-top:16px">
+    <summary class="muted">Debug (server peek)</summary>
+    <div id="debug">loading…</div>
+  </details>
+</div>
+
+<script>
+const API_BASE = ''; // same origin
+const $ = s => document.querySelector(s);
+const tbody = $('#tbody'), status = $('#status'), dbg = $('#debug');
+
+function rowHTML(it){
+  const tags=(it.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('') || '-';
+  const thumb=it.thumbnail||it.image||'';
+  return `
+    <tr data-id="${it._id}">
+      <td>${thumb?`<img class="thumb" src="${thumb}" alt="">`:'-'}</td>
+      <td><div style="font-weight:700">${it.title||'-'}</div><div class="muted">${it.description||''}</div></td>
+      <td><span class="pill">${it.category || '-'}</span></td>
+      <td>${tags}</td>
+      <td>${it.isSaved ? 'Yes' : 'No'}</td>
+      <td>${it.createdAt || '-'}</td>
+      <td>
+        ${it.instagramUrl?`<a class="btn" href="${it.instagramUrl}" target="_blank">Open IG</a>`:''}
+        <a class="btn" href="./edit.html?id=${encodeURIComponent(it._id)}">Edit</a>
+        <button class="btn danger" data-action="delete">Delete</button>
+      </td>
+    </tr>
+  `;
+}
+
+function render(items){
+  tbody.innerHTML='';
+  (items||[]).forEach(it=>tbody.insertAdjacentHTML('beforeend', rowHTML(it)));
+  status.textContent=`Loaded ${items?.length||0} item(s).`;
+}
+
+async function fetchList(){
+  try{
+    const q=$('#search').value.trim(), category=$('#category').value, saved=$('#saved').value;
+    const params=new URLSearchParams();
+    if(q) params.append('q',q); if(category) params.append('category',category); if(saved) params.append('saved',saved);
+    const r=await fetch(`${API_BASE}/api/recent-items?`+params.toString());
+    const data=await r.json();
+    if(!r.ok || !data.ok) throw new Error(data.error || 'Failed');
+    render(data.items);
+    peek();
+  }catch(e){ console.error(e); status.textContent='Error: '+e.message; }
+}
+
+async function peek(){
+  try{
+    const r = await fetch(`${API_BASE}/api/debug/peek`);
+    const d = await r.json();
+    dbg.textContent = r.ok ? JSON.stringify(d, null, 2) : (d.error || 'debug error');
+  }catch(e){ dbg.textContent = e.message; }
+}
+
+$('#btnFetch').addEventListener('click', fetchList);
+$('#btnClear').addEventListener('click', ()=>{ $('#search').value=''; $('#category').value=''; $('#saved').value=''; fetchList(); });
+$('#btnAdd').addEventListener('click', ()=> location.href='./edit.html');
+
+tbody.addEventListener('click', async (e)=>{
+  const btn=e.target.closest('[data-action="delete"]'); if(!btn) return;
+  const tr=btn.closest('tr'); const id=tr?.getAttribute('data-id'); if(!id) return;
+  if(!confirm('Delete this item?')) return;
+  try{
+    const r=await fetch(`${API_BASE}/api/recent-items/${encodeURIComponent(id)}`,{method:'DELETE'});
+    const data=await r.json(); if(!r.ok||!data.ok) throw new Error(data.error||'Delete failed');
+    tr.remove(); status.textContent='Deleted.';
+    peek();
+  }catch(err){ alert(err.message); }
+});
+
+fetchList();
+</script>
+</body>
+</html>

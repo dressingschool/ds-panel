@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Images — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; --accent:#22d3ee; --accent2:#60a5fa; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+  header{padding:18px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b1220,#0f172a 40%,#111827);display:flex;gap:12px;align-items:center}
+  header a{color:#cbd5e1;text-decoration:none}
+  h1{margin:0}
+  .container{padding:18px 20px;max-width:1200px;margin:0 auto}
+  .controls{display:grid;grid-template-columns:1fr 160px 140px auto auto auto;gap:10px;margin:12px 0}
+  input,select,button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1020;color:#e5e7eb}
+  .primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#001018;font-weight:700}
+  .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:top}
+  thead{background:rgba(255,255,255,.03)}
+  .thumb{width:56px;height:70px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+  .pill{padding:4px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px}
+  .tag{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted);font-size:12px;margin:2px 4px 0 0}
+  .btn{padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:#0b1020;color:#fff;cursor:pointer;margin-right:8px;text-decoration:none;display:inline-block}
+  .danger{background:#2b0e10;border-color:#3b0f12;color:#fecaca}
+  .muted{color:var(--muted)}
+  #debug{white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px dashed var(--border);padding:10px;border-radius:10px}
+</style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="images.html">Images</a></li>
+                <li><a href="add-category.html">Add Category</a></li>
+                <li><a href="add-json.html">Add JSON</a></li>
+                <li><a href="edit-image.html">Edit Image</a></li>
+                <li><a href="aicards.html">AI Cards</a></li>
+                <li><a href="recreatoutfit.html">Recreate Outfit</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<div class="container">
+  <div class="controls">
+    <input id="search" placeholder="Search title/desc/tags…" />
+    <select id="category">
+      <option value="">All Categories</option>
+      <option value="hairstyle">hairstyle</option>
+    </select>
+    <select id="pub">
+      <option value="">Public: Any</option>
+      <option value="true">Public: Yes</option>
+      <option value="false">Public: No</option>
+    </select>
+    <button id="btnFetch" class="primary">Search</button>
+    <button id="btnClear">Clear + Reload</button>
+    <button id="btnAdd">+ Add</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:70px">Thumb</th>
+          <th>Title & Description</th>
+          <th>Category</th>
+          <th>Tags</th>
+          <th>Public</th>
+          <th>Likes/Saves/Shares</th>
+          <th>Created</th>
+          <th style="width:230px">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="muted" id="status" style="margin-top:6px">Ready.</div>
+
+  <details style="margin-top:16px">
+    <summary class="muted">Debug</summary>
+    <div id="debug">loading…</div>
+  </details>
+</div>
+
+<script>
+/* ---------- API base autodetect ---------- */
+const API_BASE = (() => {
+  // If we are already on :4000, same origin
+  if (location.port === '4000') return '';
+  // Otherwise point to your Node server on 4000 (works if you opened this via 5500)
+  const host = location.hostname || 'localhost';
+  return `http://${host}:4000`;
+})();
+
+/* ---------- safe fetch wrapper ---------- */
+async function safeFetchJSON(url, options) {
+  const r = await fetch(url, options);
+  const ct = (r.headers.get('content-type') || '').toLowerCase();
+  const text = await r.text();
+  let data = null;
+  if (ct.includes('application/json')) {
+    try { data = JSON.parse(text); } catch { /* ignore */ }
+  }
+  if (!r.ok) {
+    const msg = (data && data.error) ? data.error : (`HTTP ${r.status} ${r.statusText}\n` + text.slice(0, 200));
+    throw new Error(msg);
+  }
+  return data ?? {};
+}
+
+const $ = s => document.querySelector(s);
+const tbody = $('#tbody'), status = $('#status'), dbg = $('#debug');
+
+function rowHTML(it){
+  const tags=(it.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('') || '-';
+  const thumb=it.thumbnailUrl||it.imageUrl||'';
+  return `
+    <tr data-id="${it._id}">
+      <td>${thumb?`<img class="thumb" src="${thumb}" alt="">`:'-'}</td>
+      <td><div style="font-weight:700">${it.title||'-'}</div><div class="muted">${it.description||''}</div></td>
+      <td><span class="pill">${it.category||'-'}</span></td>
+      <td>${tags}</td>
+      <td>${it.isPublic?'Yes':'No'}</td>
+      <td>${(it.likes??0)} / ${(it.saves??0)} / ${(it.shares??0)}</td>
+      <td>${it.createdAt || '-'}</td>
+      <td>
+        ${it.imageUrl?`<a class="btn" href="${it.imageUrl}" target="_blank">Open</a>`:''}
+        <a class="btn" href="./edit-image.html?id=${encodeURIComponent(it._id)}">Edit</a>
+        <button class="btn danger" data-action="delete">Delete</button>
+      </td>
+    </tr>
+  `;
+}
+
+function render(items){ tbody.innerHTML=''; (items||[]).forEach(it=>tbody.insertAdjacentHTML('beforeend', rowHTML(it))); status.textContent=`Loaded ${items?.length||0} image(s).`; }
+
+async function fetchList(){
+  try{
+    const q=$('#search').value.trim(), category=$('#category').value, pub=$('#pub').value;
+    const params=new URLSearchParams();
+    if(q) params.append('q',q); if(category) params.append('category',category); if(pub) params.append('pub',pub);
+    const url = `${API_BASE}/api/images?${params.toString()}`;
+    const data = await safeFetchJSON(url);
+    render(data.items);
+    await peek();
+  }catch(e){ console.error(e); status.textContent='Error: '+e.message; }
+}
+
+async function peek(){
+  try{
+    const health = await (await fetch(`${API_BASE}/api/health`)).text();
+    const debug = await safeFetchJSON(`${API_BASE}/api/debug/peek-images`).catch(err => ({ ok:false, error: String(err)}));
+    dbg.textContent =
+      `[API_BASE] ${API_BASE || '(same origin)'}\n` +
+      `[GET] ${API_BASE}/api/images\n` +
+      `[HEALTH] ${health}\n` +
+      `[PEEK] ${JSON.stringify(debug, null, 2)}`;
+  }catch(e){
+    dbg.textContent = `Debug error: ${e.message}`;
+  }
+}
+
+$('#btnFetch').addEventListener('click', fetchList);
+$('#btnClear').addEventListener('click', ()=>{ $('#search').value=''; $('#category').value=''; $('#pub').value=''; fetchList(); });
+$('#btnAdd').addEventListener('click', ()=> location.href='./edit-image.html');
+
+tbody.addEventListener('click', async (e)=>{
+  const btn=e.target.closest('[data-action="delete"]'); if(!btn) return;
+  const tr=btn.closest('tr'); const id=tr?.getAttribute('data-id'); if(!id) return;
+  if(!confirm('Delete this image?')) return;
+  try{
+    const url = `${API_BASE}/api/images/${encodeURIComponent(id)}`;
+    const data = await safeFetchJSON(url, {method:'DELETE'});
+    tr.remove(); status.textContent='Deleted.';
+    await peek();
+  }catch(err){ alert(err.message); }
+});
+
+fetchList();
+</script>
+</body>
+</html>

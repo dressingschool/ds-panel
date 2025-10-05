@@ -1,0 +1,8 @@
+# Node dependencies folder
+/node_modules
+
+# Environment variables (contains secrets!)
+.env
+
+# Google Cloud credentials (contains secrets!)
+Serviceaccount.json

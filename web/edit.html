@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Edit Item — Type‑2 (content.products)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; --accent:#22d3ee; --accent2:#60a5fa; --danger:#ef4444; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+  header{padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b1220,#0f172a 40%,#111827);display:flex;align-items:center;gap:10px}
+  header a{color:var(--text);text-decoration:none;border:1px solid var(--border);padding:8px 10px;border-radius:8px}
+  h1{margin:0;font-size:18px}
+  .container{max-width:1100px;margin:0 auto;padding:18px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  input[type="text"],input[type="number"],textarea{width:100%;padding:10px 12px;background:#0b1020;color:var(--text);border:1px solid var(--border);border-radius:10px}
+  textarea{min-height:90px}
+  .row{display:flex;gap:10px;align-items:center}
+  .btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1020;color:#fff;cursor:pointer}
+  .primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#001018;font-weight:700}
+  .danger{background:#2b0e10;border-color:#3b0f12;color:#fecaca}
+  table{width:100%;border-collapse:collapse}
+  th,td{border-bottom:1px solid var(--border);padding:8px;vertical-align:top;font-size:14px}
+  th{color:var(--muted);text-align:left}
+  .toast{position:fixed;bottom:20px;right:20px;background:#052e22;color:#a7f3d0;border:1px solid var(--border);padding:10px 12px;border-radius:10px}
+  .err{background:#4c1d1d;color:#fecaca}
+</style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="images.html">Images</a></li>
+                <li><a href="add-category.html">Add Category</a></li>
+                <li><a href="add-json.html">Add JSON</a></li>
+                <li><a href="edit-image.html">Edit Image</a></li>
+                <li><a href="aicards.html">AI Cards</a></li>
+                <li><a href="recreatoutfit.html">Recreate Outfit</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <div class="grid">
+      <div><label>Title</label><input id="title" type="text" /></div>
+      <div><label>Category</label><input id="category" type="text" value="recent" /></div>
+      <div style="grid-column:1/-1"><label>Description</label><textarea id="description"></textarea></div>
+      <div><label>Tags (comma)</label><input id="tags" type="text" /></div>
+      <div class="row"><label><input id="isSaved" type="checkbox" /> &nbsp; Saved</label></div>
+      <div><label>Instagram URL</label><input id="instagramUrl" type="text" /></div>
+      <div><label>Image URL</label><input id="image" type="text" /></div>
+      <div><label>Thumbnail URL</label><input id="thumbnail" type="text" /></div>
+      <div><label>Upload Date (text)</label><input id="uploadDate" type="text" placeholder="e.g., 8 hours ago" /></div>
+      <div><label>Created At (ISO)</label><input id="createdAt" type="text" disabled /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px">Stats</h3>
+    <div class="grid">
+      <div><label>Views</label><input id="stats_views" type="number" min="0" /></div>
+      <div><label>Saves</label><input id="stats_saves" type="number" min="0" /></div>
+      <div><label>Shares</label><input id="stats_shares" type="number" min="0" /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h3 style="margin:0 0 10px">Products (content.products)</h3>
+      <button class="btn" id="addProduct">+ Add Product</button>
+    </div>
+    <div style="overflow:auto;margin-top:8px">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:90px">#</th>
+            <th>Brand</th>
+            <th>Name</th>
+            <th>Image</th>
+            <th>Link</th>
+            <th style="width:120px">Price</th>
+            <th style="width:170px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="prodBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content:flex-end;gap:10px">
+    <button class="btn primary" id="saveBtn">Save</button>
+    <button class="btn danger" id="deleteBtn">Delete</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = ''; // same origin
+const qs = new URLSearchParams(location.search);
+const id = qs.get('id');
+
+const $ = s => document.querySelector(s);
+const prodBody = $('#prodBody');
+
+function toast(msg, err=false){ const t=document.createElement('div'); t.className='toast'+(err?' err':''); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2000); }
+const esc = s => (s ?? '').toString().replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const toInt = v => { if(v===''||v==null) return undefined; const n=Number(v); return Number.isFinite(n)?n:undefined; };
+const trimU = v => { const x=(v??'').trim(); return x?x:undefined; };
+
+function rowTpl(p={}){
+  return `
+    <tr>
+      <td><input type="number" min="0" step="1" class="p_id" value="${p.id ?? ''}" style="width:90px"></td>
+      <td><input type="text" class="p_brand" value="${esc(p.brand)}"></td>
+      <td><input type="text" class="p_name" value="${esc(p.name)}"></td>
+      <td><input type="text" class="p_image" value="${esc(p.image)}"></td>
+      <td><input type="text" class="p_link" value="${esc(p.link)}"></td>
+      <td><input type="text" class="p_price" value="${esc(p.price)}" style="width:120px"></td>
+      <td>
+        <button class="btn" data-act="up">↑</button>
+        <button class="btn" data-act="down">↓</button>
+        <button class="btn danger" data-act="remove">Remove</button>
+      </td>
+    </tr>
+  `;
+}
+function renderProducts(arr){ prodBody.innerHTML=''; (arr||[]).forEach(p => prodBody.insertAdjacentHTML('beforeend', rowTpl(p))); }
+function readProducts(){
+  return [...prodBody.querySelectorAll('tr')].map(tr => ({
+    id: toInt(tr.querySelector('.p_id').value),
+    brand: trimU(tr.querySelector('.p_brand').value),
+    name: trimU(tr.querySelector('.p_name').value),
+    image: trimU(tr.querySelector('.p_image').value),
+    link: trimU(tr.querySelector('.p_link').value),
+    price: trimU(tr.querySelector('.p_price').value),
+  }));
+}
+prodBody.addEventListener('click', (e)=>{
+  const btn=e.target.closest('[data-act]'); if(!btn) return;
+  const tr=btn.closest('tr'); const rows=[...prodBody.children]; const i=rows.indexOf(tr);
+  if(btn.dataset.act==='remove') tr.remove();
+  if(btn.dataset.act==='up' && i>0) prodBody.insertBefore(tr, rows[i-1]);
+  if(btn.dataset.act==='down' && i<rows.length-1) prodBody.insertBefore(rows[i+1], tr);
+});
+$('#addProduct').addEventListener('click', ()=> prodBody.insertAdjacentHTML('beforeend', rowTpl({})) );
+
+$('#saveBtn').addEventListener('click', save);
+$('#deleteBtn').addEventListener('click', del);
+
+async function save(){
+  try{
+    const payload = {
+      title: $('#title').value.trim(),
+      category: $('#category').value.trim(),
+      description: $('#description').value.trim(),
+      instagramUrl: $('#instagramUrl').value.trim(),
+      image: $('#image').value.trim(),
+      thumbnail: $('#thumbnail').value.trim(),
+      uploadDate: $('#uploadDate').value.trim(),
+      isSaved: $('#isSaved').checked,
+      tags: ($('#tags').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+      content: { products: readProducts() },
+      stats: {
+        views: numOrUndef($('#stats_views').value),
+        saves: numOrUndef($('#stats_saves').value),
+        shares: numOrUndef($('#stats_shares').value),
+      }
+    };
+    Object.keys(payload.stats).forEach(k => payload.stats[k]===undefined && delete payload.stats[k]);
+    if (Object.keys(payload.stats).length === 0) delete payload.stats;
+
+    let res;
+    if (id) {
+      res = await fetch(`${API_BASE}/api/recent-items/${encodeURIComponent(id)}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(`${API_BASE}/api/recent-items`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      });
+    }
+    const data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+    const newId = id || data.id;
+    toast(id ? 'Saved' : 'Created');
+    if (!id) setTimeout(()=> location.href = `./edit.html?id=${encodeURIComponent(newId)}`, 600);
+  }catch(e){ toast(e.message, true); }
+}
+
+async function del(){
+  if(!id) return alert('Nothing to delete (new item).');
+  if(!confirm('Delete permanently?')) return;
+  try{
+    const r=await fetch(`${API_BASE}/api/recent-items/${encodeURIComponent(id)}`, { method:'DELETE' });
+    const data=await r.json(); if(!r.ok||!data.ok) throw new Error(data.error||'Delete failed');
+    toast('Deleted'); setTimeout(()=> location.href='./index.html', 600);
+  }catch(e){ toast(e.message, true); }
+}
+function numOrUndef(v){ if(v===''||v==null) return undefined; const n=Number(v); return Number.isFinite(n)?n:undefined; }
+
+async function load(){
+  $('#docId').textContent = id || 'NEW';
+  if (!id) { renderProducts([]); $('#createdAt').value = new Date().toISOString(); return; }
+  const r = await fetch(`${API_BASE}/api/recent-items/${encodeURIComponent(id)}`);
+  const data = await r.json();
+  if(!r.ok || !data.ok) { toast(data.error || 'Failed to load', true); return; }
+
+  const it = data.item;
+  $('#title').value = it.title || '';
+  $('#category').value = it.category || '';
+  $('#description').value = it.description || '';
+  $('#tags').value = (it.tags||[]).join(', ');
+  $('#isSaved').checked = !!it.isSaved;
+  $('#instagramUrl').value = it.instagramUrl || '';
+  $('#image').value = it.image || '';
+  $('#thumbnail').value = it.thumbnail || '';
+  $('#uploadDate').value = it.uploadDate || '';
+  $('#createdAt').value = it.createdAt || '';
+
+  $('#stats_views').value = it.stats?.views ?? '';
+  $('#stats_saves').value = it.stats?.saves ?? '';
+  $('#stats_shares').value = it.stats?.shares ?? '';
+
+  const products = (it && it.content && Array.isArray(it.content.products)) ? it.content.products : [];
+  renderProducts(products);
+}
+load();
+</script>
+</body>
+</html>

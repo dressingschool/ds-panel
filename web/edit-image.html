@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Edit Image</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; --accent:#22d3ee; --accent2:#60a5fa; --danger:#ef4444; }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
+  header{padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b1220,#0f172a 40%,#111827);display:flex;align-items:center;gap:10px}
+  header a{color:#cbd5e1;text-decoration:none;border:1px solid var(--border);padding:8px 10px;border-radius:8px}
+  h1{margin:0;font-size:18px}
+  .container{max-width:1100px;margin:0 auto;padding:18px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  input[type="text"],input[type="number"],textarea{width:100%;padding:10px 12px;background:#0b1020;color:#e5e7eb;border:1px solid var(--border);border-radius:10px}
+  textarea{min-height:90px}
+  .row{display:flex;gap:10px;align-items:center}
+  .btn{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1020;color:#fff;cursor:pointer}
+  .primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#001018;font-weight:700}
+  .danger{background:#2b0e10;border-color:#3b0f12;color:#fecaca}
+  .toast{position:fixed;bottom:20px;right:20px;background:#052e22;color:#a7f3d0;border:1px solid var(--border);padding:10px 12px;border-radius:10px}
+  .err{background:#4c1d1d;color:#fecaca}
+</style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <nav>
+            <ul>
+                <li><a href="index.html">Home</a></li>
+                <li><a href="images.html">Images</a></li>
+                <li><a href="add-category.html">Add Category</a></li>
+                <li><a href="add-json.html">Add JSON</a></li>
+                <li><a href="edit-image.html">Edit Image</a></li>
+                <li><a href="aicards.html">AI Cards</a></li>
+                <li><a href="recreatoutfit.html">Recreate Outfit</a></li>
+            </ul>
+        </nav>
+    </div>
+</header>
+
+<div class="container">
+  <div class="card">
+    <div class="grid">
+      <div><label>Title</label><input id="title" type="text" /></div>
+      <div><label>Category</label><input id="category" type="text" value="hairstyle" /></div>
+      <div style="grid-column:1/-1"><label>Description</label><textarea id="description"></textarea></div>
+      <div><label>Tags (comma)</label><input id="tags" type="text" /></div>
+      <div class="row"><label><input id="isPublic" type="checkbox" /> &nbsp; Public</label></div>
+      <div><label>Image URL</label><input id="imageUrl" type="text" /></div>
+      <div><label>Thumbnail URL</label><input id="thumbnailUrl" type="text" /></div>
+      <div><label>Upload Date (ISO string)</label><input id="uploadDate" type="text" placeholder="2024-02-01T13:45:00Z" /></div>
+      <div><label>Created At (ISO)</label><input id="createdAt" type="text" disabled /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px">Counters</h3>
+    <div class="grid">
+      <div><label>Likes</label><input id="likes" type="number" min="0" /></div>
+      <div><label>Saves</label><input id="saves" type="number" min="0" /></div>
+      <div><label>Shares</label><input id="shares" type="number" min="0" /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px">Metadata</h3>
+    <div class="grid">
+      <div><label>Format</label><input id="format" type="text" placeholder="jpg/png/webp" /></div>
+      <div><label>Size (bytes)</label><input id="size" type="number" min="0" /></div>
+      <div><label>Width (px)</label><input id="width" type="number" min="0" /></div>
+      <div><label>Height (px)</label><input id="height" type="number" min="0" /></div>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content:flex-end;gap:10px">
+    <button class="btn primary" id="saveBtn">Save</button>
+    <button class="btn danger" id="deleteBtn">Delete</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+const qs = new URLSearchParams(location.search);
+const id = qs.get('id');
+
+const $ = s => document.querySelector(s);
+function toast(msg, err=false){ const t=document.createElement('div'); t.className='toast'+(err?' err':''); t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2000); }
+function numOrUndef(v){ if(v===''||v==null) return undefined; const n=Number(v); return Number.isFinite(n)?n:undefined; }
+
+document.getElementById('saveBtn').addEventListener('click', save);
+document.getElementById('deleteBtn').addEventListener('click', del);
+
+async function save(){
+  try{
+    const payload = {
+      title: $('#title').value.trim(),
+      category: $('#category').value.trim(),
+      description: $('#description').value.trim(),
+      tags: ($('#tags').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+      isPublic: $('#isPublic').checked,
+      imageUrl: $('#imageUrl').value.trim(),
+      thumbnailUrl: $('#thumbnailUrl').value.trim(),
+      uploadDate: $('#uploadDate').value.trim(),
+      likes: numOrUndef($('#likes').value),
+      saves: numOrUndef($('#saves').value),
+      shares: numOrUndef($('#shares').value),
+      metadata: {
+        format: $('#format').value.trim(),
+        size: numOrUndef($('#size').value),
+        width: numOrUndef($('#width').value),
+        height: numOrUndef($('#height').value),
+      }
+    };
+    // clean empty metadata
+    Object.keys(payload.metadata).forEach(k => payload.metadata[k]===undefined || payload.metadata[k]==='' ? delete payload.metadata[k] : 0);
+    if (Object.keys(payload.metadata).length === 0) delete payload.metadata;
+
+    let res;
+    if (id) {
+      res = await fetch(`${API_BASE}/api/images/${encodeURIComponent(id)}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(`${API_BASE}/api/images`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+      });
+    }
+    const data = await res.json();
+    if(!res.ok || !data.ok) throw new Error(data.error || 'Save failed');
+    const newId = id || data.id;
+    toast(id ? 'Saved' : 'Created');
+    if (!id) setTimeout(()=> location.href = `./edit-image.html?id=${encodeURIComponent(newId)}`, 600);
+  }catch(e){ toast(e.message, true); }
+}
+
+async function del(){
+  if(!id) return alert('Nothing to delete (new).');
+  if(!confirm('Delete permanently?')) return;
+  try{
+    const r=await fetch(`${API_BASE}/api/images/${encodeURIComponent(id)}`, { method:'DELETE' });
+    const data=await r.json(); if(!r.ok||!data.ok) throw new Error(data.error||'Delete failed');
+    toast('Deleted'); setTimeout(()=> location.href='./images.html', 600);
+  }catch(e){ toast(e.message, true); }
+}
+
+async function load(){
+  $('#docId').textContent = id || 'NEW';
+  if (!id) { $('#createdAt').value = new Date().toISOString(); return; }
+  const r = await fetch(`${API_BASE}/api/images/${encodeURIComponent(id)}`);
+  const data = await r.json();
+  if(!r.ok || !data.ok) { toast(data.error || 'Failed to load', true); return; }
+
+  const it = data.item;
+  $('#title').value = it.title || '';
+  $('#category').value = it.category || '';
+  $('#description').value = it.description || '';
+  $('#tags').value = (it.tags||[]).join(', ');
+  $('#isPublic').checked = !!it.isPublic;
+  $('#imageUrl').value = it.imageUrl || '';
+  $('#thumbnailUrl').value = it.thumbnailUrl || '';
+  $('#uploadDate').value = it.uploadDate || '';
+  $('#createdAt').value = it.createdAt || '';
+
+  $('#likes').value = it.likes ?? '';
+  $('#saves').value = it.saves ?? '';
+  $('#shares').value = it.shares ?? '';
+
+  $('#format').value = it.metadata?.format ?? '';
+  $('#size').value = it.metadata?.size ?? '';
+  $('#width').value = it.metadata?.width ?? '';
+  $('#height').value = it.metadata?.height ?? '';
+}
+load();
+</script>
+</body>
+</html>

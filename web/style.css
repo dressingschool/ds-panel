@@ -1,0 +1,48 @@
+    /* Basic Body Reset */
+    body {
+        font-family: Arial, sans-serif;
+        
+        background-color: #f4f4f4;
+    }
+
+    /* Header Styling */
+    header {
+        background-color: #333;
+        color: #fff;
+        padding: 10px 0;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* Container to center content */
+ 
+    .logo {
+        margin: 0;
+        font-size: 24px;
+    }
+
+    /* Navigation Styling */
+    nav ul {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    nav ul li {
+        display: inline-block;
+        margin-left: 20px;
+    }
+
+    nav ul li a {
+        color: #fff;
+        text-decoration: none;
+        font-size: 16px;
+        padding: 5px 10px;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+    }
+
+    /* Highlight the current page */
+    nav ul li a.active,
+    nav ul li a:hover {
+        background-color: #555;
+    }
