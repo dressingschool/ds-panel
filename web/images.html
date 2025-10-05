@@ -92,7 +92,7 @@
 /* ✅ --- MODIFIED: API base now handles local and live environments --- */
 const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'http://localhost:4000' // URL for local development
-  : 'https://ds-panel.onrender.com/'; // <-- ⚠️ PASTE YOUR LIVE RENDER SERVER URL HERE
+  : 'https://ds-panel.onrender.com'; // <-- ⚠️ PASTE YOUR LIVE RENDER SERVER URL HERE
 
 /* ---------- safe fetch wrapper ---------- */
 async function safeFetchJSON(url, options) {
