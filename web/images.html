@@ -89,14 +89,10 @@
 </div>
 
 <script>
-/* ---------- API base autodetect ---------- */
-const API_BASE = (() => {
-  // If we are already on :4000, same origin
-  if (location.port === '4000') return '';
-  // Otherwise point to your Node server on 4000 (works if you opened this via 5500)
-  const host = location.hostname || 'localhost';
-  return `http://${host}:4000`;
-})();
+/* ✅ --- MODIFIED: API base now handles local and live environments --- */
+const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? 'http://localhost:4000' // URL for local development
+  : 'https://your-app-server.onrender.com'; // <-- ⚠️ PASTE YOUR LIVE RENDER SERVER URL HERE
 
 /* ---------- safe fetch wrapper ---------- */
 async function safeFetchJSON(url, options) {
@@ -141,6 +137,8 @@ function rowHTML(it){
 function render(items){ tbody.innerHTML=''; (items||[]).forEach(it=>tbody.insertAdjacentHTML('beforeend', rowHTML(it))); status.textContent=`Loaded ${items?.length||0} image(s).`; }
 
 async function fetchList(){
+  // ✅ ADDED: Loading message for better UX
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 20px;">Loading...</td></tr>';
   try{
     const q=$('#search').value.trim(), category=$('#category').value, pub=$('#pub').value;
     const params=new URLSearchParams();
@@ -149,7 +147,11 @@ async function fetchList(){
     const data = await safeFetchJSON(url);
     render(data.items);
     await peek();
-  }catch(e){ console.error(e); status.textContent='Error: '+e.message; }
+  }catch(e){
+    console.error(e);
+    status.textContent='Error: '+e.message;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 20px; color: #fecaca;">${e.message}</td></tr>`;
+  }
 }
 
 async function peek(){
