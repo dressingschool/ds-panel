@@ -84,7 +84,7 @@
 // ✅ FIXED: This now points to the correct server on localhost and on your live site.
 const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'http://localhost:4000' // URL for local development
-  : 'https://ds-panel.onrender.com/'; // <-- ⚠️ PASTE YOUR LIVE RENDER SERVER URL HERE
+  : 'https://ds-panel.onrender.com'; // <-- ⚠️ PASTE YOUR LIVE RENDER SERVER URL HERE
 
 const qs = new URLSearchParams(location.search);
 const id = qs.get('id');
