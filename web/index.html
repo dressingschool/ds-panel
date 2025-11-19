@@ -5,13 +5,13 @@
 <title>Recent Items — Dashboard</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; --accent:#22d3ee; --accent2:#60a5fa; }
+  :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --border:#1f2937; --accent:#22d3ee; --accent2:#60a5fa; --danger:#ef4444; }
   *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial}
   header{padding:18px 20px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b1220,#0f172a 40%,#111827)}
   h1{margin:0}
   .container{padding:18px 20px;max-width:1200px;margin:0 auto}
   .controls{display:grid;grid-template-columns:1fr 160px 140px auto auto auto;gap:10px;margin:12px 0}
-  input,select,button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1020;color:#e5e7eb}
+  input,select,button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#0b1020;color:var(--text)}
   .primary{background:linear-gradient(90deg,var(--accent),var(--accent2));border:0;color:#001018;font-weight:700}
   .table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
   table{width:100%;border-collapse:collapse}
@@ -24,13 +24,14 @@
   .danger{background:#2b0e10;border-color:#3b0f12;color:#fecaca}
   .muted{color:var(--muted)}
   #debug{white-space:pre;font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px dashed var(--border);padding:10px;border-radius:10px}
+  .loading{color:var(--accent);}
 </style>
 </head>
 <body>
 <header>
     <div class="container">
         <nav>
-            <ul>
+            <ul style="display:flex;gap:16px;list-style:none;margin:0;padding:0">
                 <li><a href="index.html">Home</a></li>
                 <li><a href="images.html">Images</a></li>
                 <li><a href="add-category.html">Add Category</a></li>
@@ -41,7 +42,9 @@
             </ul>
         </nav>
     </div>
-</header><div class="container">
+</header>
+
+<div class="container">
   <div class="controls">
     <input id="search" placeholder="Search title/desc/tags…"/>
     <select id="category">
@@ -117,12 +120,13 @@ function render(items){
 
 async function fetchList(){
   try{
+    status.textContent = 'Searching...';
     const q=$('#search').value.trim(), category=$('#category').value, saved=$('#saved').value;
     const params=new URLSearchParams();
     if(q) params.append('q',q); if(category) params.append('category',category); if(saved) params.append('saved',saved);
     const r=await fetch(`${API_BASE}/api/recent-items?`+params.toString());
     const data=await r.json();
-    if(!r.ok || !data.ok) throw new Error(data.error || 'Failed');
+    if(!r.ok || !data.ok) throw new Error(data.error || `Server error: ${r.status}`);
     render(data.items);
     peek();
   }catch(e){ console.error(e); status.textContent='Error: '+e.message; }
@@ -145,11 +149,12 @@ tbody.addEventListener('click', async (e)=>{
   const tr=btn.closest('tr'); const id=tr?.getAttribute('data-id'); if(!id) return;
   if(!confirm('Delete this item?')) return;
   try{
+    status.textContent = 'Deleting...';
     const r=await fetch(`${API_BASE}/api/recent-items/${encodeURIComponent(id)}`,{method:'DELETE'});
     const data=await r.json(); if(!r.ok||!data.ok) throw new Error(data.error||'Delete failed');
     tr.remove(); status.textContent='Deleted.';
     peek();
-  }catch(err){ alert(err.message); }
+  }catch(err){ alert(err.message); status.textContent='Delete error.'; }
 });
 
 fetchList();

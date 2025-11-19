@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Basics Collection Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#f4f7f9;color:#333;margin:0;padding:2em}
+    .container{max-width:800px;margin:0 auto;background:#fff;padding:2em;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.1)}
+    h1,h2,h3{color:#1a202c;border-bottom:2px solid #e2e8f0;padding-bottom:.5em}
+    h3{border:none;padding:0;margin-top:1.5em}
+    button{background:#4299e1;color:#fff;border:none;padding:10px 15px;border-radius:5px;cursor:pointer;font-size:1em;transition:background .2s}
+    button:hover{background:#3182ce}
+    button.submit-btn{background:#48bb78}button.submit-btn:hover{background:#38a169}
+    button.update-btn{background:#f6ad55}button.update-btn:hover{background:#ed8936}
+    input[type=text],input[type=url],input[type=number]{width:100%;padding:10px;border:1px solid #cbd5e0;border-radius:5px;font-size:1em;box-sizing:border-box}
+    form{margin-top:1em}.form-group{margin-bottom:1em}
+    .form-group label{display:block;margin-bottom:.5em;font-weight:600}
+    #all-groups-list,#add-status,#update-status{background:#edf2f7;border:1px solid #e2e8f0;border-radius:5px;padding:1em;margin-top:1em;white-space:pre-wrap;word-wrap:break-word;min-height:24px}
+    .error{color:#e53e3e;font-weight:700}.success{color:#38a169;font-weight:700}
+    hr{border:none;border-top:1px solid #e2e8f0;margin:2em 0}
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Basics Collection Admin</h1>
+
+  <!-- UPDATE DOCUMENT ORDER -->
+  <section>
+    <h2>Update Document Order</h2>
+    <form id="updateOrderForm">
+      <div class="form-group">
+        <label>Document ID to Update</label>
+        <input type="text" id="updateDocIdInput" placeholder="e.g. shirts" required>
+      </div>
+      <div class="form-group">
+        <label>New Order Number</label>
+        <input type="number" id="updateDocOrderInput" placeholder="e.g. 1" required>
+      </div>
+      <button type="submit" class="update-btn">Update Order</button>
+    </form>
+    <div id="update-status"></div>
+  </section>
+
+  <hr>
+
+  <!-- ADD ITEM TO DOCUMENT -->
+  <section>
+    <h2>Add an Item to a Document</h2>
+    <form id="addItemForm">
+      <div class="form-group">
+        <label>Document ID (e.g. shirts, pants)</label>
+        <input type="text" id="docIdInput" placeholder="target document ID" required>
+      </div>
+      <div class="form-group">
+        <label>Document Order (1 = first section)</label>
+        <input type="number" id="docOrderInput" placeholder="1" required>
+      </div>
+
+      <h3>Item Details</h3>
+      <div class="form-group">
+        <label>Item ID (leave blank to auto-generate)</label>
+        <input type="text" id="itemIdInput">
+      </div>
+      <div class="form-group">
+        <label>Item Title</label>
+        <input type="text" id="itemTitleInput" placeholder="Black Classic Shirt" required>
+      </div>
+      <div class="form-group">
+        <label>Image URL</label>
+        <input type="url" id="itemImgInput" placeholder="https://….jpg" required>
+      </div>
+      <div class="form-group">
+        <label>Product URL</label>
+        <input type="url" id="itemUrlInput" placeholder="https://…" required>
+      </div>
+      <div class="form-group">
+        <label>Price</label>
+        <input type="number" id="itemPriceInput" placeholder="29.99" step="0.01" required>
+      </div>
+      <div class="form-group">
+        <label><input type="checkbox" id="itemIsNewInput"> Is this a new item?</label>
+      </div>
+      <button type="submit" class="submit-btn">Add Item</button>
+    </form>
+    <div id="add-status"></div>
+  </section>
+
+  <hr>
+
+  <!-- LIST ALL DOCUMENTS (SORTED) -->
+  <section>
+    <h2>View All Documents</h2>
+    <button id="fetchAllBtn">Get All Documents (Sorted by Order)</button>
+    <div id="all-groups-list">Click the button to see all documents.</div>
+  </section>
+</div>
+
+<script>
+  /* ----------  HELPERS  ---------- */
+  const $ = id => document.getElementById(id);
+  const base = '/api/basics';
+
+  /* ----------  UPDATE ORDER  ---------- */
+  $('updateOrderForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id   = $('updateDocIdInput').value.trim();
+    const order= Number($('updateDocOrderInput').value);
+    $('update-status').textContent = 'Updating…';
+    try {
+      const res = await fetch(`${base}/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({order})
+      });
+      const json = await res.json();
+      if(!res.ok) throw new Error(json.error||'Unknown error');
+      $('update-status').textContent = `✅ Document “${id}” order set to ${order}`;
+      $('update-status').className = 'success';
+      $('fetchAllBtn').click();          // refresh list
+    } catch(err){
+      $('update-status').textContent = '❌ '+err.message;
+      $('update-status').className = 'error';
+    }
+  });
+
+  /* ----------  ADD ITEM  ---------- */
+  $('addItemForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const docId = $('docIdInput').value.trim();
+    const payload = {
+      order : Number($('docOrderInput').value),
+      id    : $('itemIdInput').value.trim() || undefined,
+      title : $('itemTitleInput').value.trim(),
+      img   : $('itemImgInput').value.trim(),
+      url   : $('itemUrlInput').value.trim(),
+      price : Number($('itemPriceInput').value),
+      isNew : $('itemIsNewInput').checked
+    };
+    if(!payload.id) delete payload.id;
+    $('add-status').textContent = 'Submitting…';
+    try{
+      const res = await fetch(`${base}/${docId}/items`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if(!res.ok) throw new Error(json.error||'Unknown error');
+      $('add-status').textContent = `✅ Item added (ID: ${json.id})`;
+      $('add-status').className = 'success';
+      $('addItemForm').reset();
+    }catch(err){
+      $('add-status').textContent = '❌ '+err.message;
+      $('add-status').className = 'error';
+    }
+  });
+
+  /* ----------  LIST ALL  ---------- */
+  $('fetchAllBtn').addEventListener('click', async () => {
+    $('all-groups-list').textContent = 'Loading…';
+    try{
+      const res = await fetch(base);
+      const arr = await res.json();
+      if(!res.ok) throw new Error(arr.error||'Fetch failed');
+      if(!arr.length){ $('all-groups-list').textContent = 'No documents.'; return;}
+      const ul = document.createElement('ul'); ul.style.paddingLeft=0; ul.style.listStyle='none';
+      arr.forEach(d=>{
+        const li=document.createElement('li');
+        li.style.padding='8px'; li.style.borderBottom='1px solid #e2e8f0';
+        li.textContent = `ID: ${d.id}  (Order: ${d.order??'none'})`;
+        ul.appendChild(li);
+      });
+      $('all-groups-list').innerHTML=''; $('all-groups-list').appendChild(ul);
+    }catch(err){
+      $('all-groups-list').innerHTML = `<span class="error">❌ ${err.message}</span>`;
+    }
+  });
+</script>
+
+</body>
+</html>

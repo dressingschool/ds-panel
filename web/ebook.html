@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>E-book Admin Panel</title>
+
+  <style>
+    /* Basic Reset & Font */
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      background-color: #f4f7f9;
+      color: #333;
+    }
+    .container { display: flex; height: 100vh; }
+    .sidebar { flex: 0 0 300px; background-color: #fff; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
+    .editor-panel { flex: 1; padding: 20px 40px; overflow-y: auto; }
+    h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0; }
+    #ebook-list { margin-top: 20px; }
+    .ebook-item { padding: 12px; border-radius: 5px; cursor: pointer; margin-bottom: 5px; border: 1px solid transparent; }
+    .ebook-item:hover { background-color: #f0f0f0; }
+    .ebook-item.active { background-color: #e0eafc; border-color: #b3c5ff; font-weight: bold; }
+    .file-uploader { background-color: #eef5ff; border: 1px solid #cce0ff; border-radius: 5px; padding: 15px; margin-bottom: 20px; }
+    .file-uploader label { font-size: 1.1em; display:block; margin-bottom: 6px; }
+    .file-uploader p { font-size: 0.9em; color: #555; margin: 5px 0; }
+    #word-file { margin-top: 10px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; font-weight: 600; margin-bottom: 5px; }
+    input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+    textarea { resize: vertical; min-height: 80px; }
+    hr { border: none; border-top: 1px solid #eee; margin: 30px 0; }
+    .chapter-block { background-color: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px; position: relative; }
+    .chapter-block h3 { margin-top: 0; }
+    .page-block { margin-left: 20px; border-left: 3px solid #e0eafc; padding-left: 15px; position: relative; }
+    .btn-remove { position: absolute; top: 10px; right: 10px; background: #fdecec; color: #c53030; border: 1px solid #f9bdbd; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+    .btn { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: 600; margin-right: 10px; }
+    .btn-primary { background-color: #007bff; color: white; width: 100%; }
+    .btn-secondary { background-color: #6c757d; color: white; margin-top: 10px; }
+    .btn-success { background-color: #28a745; color: white; }
+    .btn-danger { background-color: #dc3545; color: white; }
+    .form-actions { margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="sidebar">
+      <h2>E-books</h2>
+      <button id="new-ebook-btn" class="btn btn-primary">＋ Create New E-book</button>
+      <div id="ebook-list"></div>
+    </div>
+
+    <div class="editor-panel">
+      <h1 id="editor-title">Create New E-book</h1>
+
+      <div class="file-uploader">
+        <label for="word-file">✨ Auto-fill from Word Document (.docx)</label>
+        <p>Upload your .docx—title &amp; chapters will be detected automatically (Heading 1 = H1).</p>
+        <input type="file" id="word-file" accept=".docx">
+      </div>
+
+      <hr/>
+
+      <form id="ebook-form">
+        <div class="form-group">
+          <label for="title">Title</label>
+          <input type="text" id="title" required>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Description</label>
+          <textarea id="description" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="image">Image URL</label>
+          <input type="text" id="image">
+        </div>
+
+        <hr/>
+
+        <h2>Chapters</h2>
+        <div id="chapters-container"></div>
+        <button type="button" id="add-chapter-btn" class="btn btn-secondary">Add Chapter</button>
+
+        <div class="form-actions">
+          <button type="submit" id="save-btn" class="btn btn-success">Save Changes</button>
+          <button type="button" id="delete-btn" class="btn btn-danger" hidden>Delete E-book</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Mammoth multi-CDN loader (loaded on demand) -->
+  <script>
+    function loadMammoth() {
+      if (typeof mammoth !== 'undefined') return Promise.resolve(true);
+      const urls = [
+        'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/dist/mammoth.browser.min.js',
+        'https://unpkg.com/mammoth@1.6.0/dist/mammoth.browser.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js'
+      ];
+      function inject(url) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = url;
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => reject(new Error('Failed: ' + url));
+          document.head.appendChild(s);
+        });
+      }
+      return urls.reduce((p, url) => p.catch(() => inject(url)), Promise.reject())
+        .then(() => (typeof mammoth !== 'undefined'))
+        .catch(() => false);
+    }
+  </script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const API_URL = '/api/ebooks';
+
+      // --- DOM refs
+      const ebookList = document.getElementById('ebook-list');
+      const newEbookBtn = document.getElementById('new-ebook-btn');
+      const editorTitle = document.getElementById('editor-title');
+      const ebookForm = document.getElementById('ebook-form');
+      const titleInput = document.getElementById('title');
+      const descriptionInput = document.getElementById('description');
+      const imageInput = document.getElementById('image');
+      const chaptersContainer = document.getElementById('chapters-container');
+      const addChapterBtn = document.getElementById('add-chapter-btn');
+      const deleteBtn = document.getElementById('delete-btn');
+      const wordFileInput = document.getElementById('word-file');
+
+      let currentEbookId = null;
+
+      // --- Sidebar item builder
+      function shapeListItemEl(ebook) {
+        const item = document.createElement('div');
+        item.className = 'ebook-item';
+        item.textContent = ebook.title || '(Untitled)';
+        item.dataset.id = ebook.id;
+        item.addEventListener('click', () => selectEbook(ebook));
+        return item;
+      }
+
+      // ---------- Parsers ----------
+      function smartParseMarkdown(markdown) {
+        const ebookData = { title: '', chapters: [] };
+        const lines = (markdown || '').replace(/\r\n?/g, '\n').split('\n');
+
+        let currentChapter = null;
+        let currentPageContent = '';
+        let isIgnoringTOC = false;
+
+        for (const raw of lines) {
+          const line = raw || '';
+          if (line.startsWith('# ')) {
+            if (currentChapter && currentPageContent.trim()) {
+              currentChapter.pages.push(currentPageContent.trim());
+            }
+            currentPageContent = '';
+
+            const headingText = line.replace(/^#\s+/, '').trim();
+            if (!ebookData.title) {
+              ebookData.title = headingText;
+              continue;
+            }
+            if (headingText.toLowerCase().includes('table of contents')) {
+              isIgnoringTOC = true;
+              currentChapter = null;
+              continue;
+            }
+            isIgnoringTOC = false;
+            currentChapter = { title: headingText, pages: [] };
+            ebookData.chapters.push(currentChapter);
+          } else if (currentChapter && !isIgnoringTOC) {
+            if (line.trim() === '' && currentPageContent.trim() !== '') {
+              currentChapter.pages.push(currentPageContent.trim());
+              currentPageContent = '';
+            } else if (line.trim() !== '') {
+              currentPageContent += line + '\n';
+            }
+          }
+        }
+        if (currentChapter && currentPageContent.trim()) {
+          currentChapter.pages.push(currentPageContent.trim());
+        }
+        return ebookData;
+      }
+
+      function smartParsePlainText(text) {
+        const ebookData = { title: '', chapters: [] };
+        const clean = (text || '').replace(/\r\n?/g, '\n').trim();
+        const firstLine = (clean.split('\n').find(l => l.trim()) || '').trim();
+
+        const parts = clean.split(/\n(?=Chapter\s+\d+[:\-]\s+)/i);
+
+        if (parts.length === 1) {
+          ebookData.title = firstLine || 'Imported E-book';
+          ebookData.chapters.push({
+            title: 'Chapter 1',
+            pages: [clean]
+          });
+          return ebookData;
+        }
+
+        if (!/^Chapter\s+\d+/i.test(parts[0])) {
+          ebookData.title = parts[0].split('\n')[0].trim() || firstLine || 'Imported E-book';
+          parts.shift();
+        }
+
+        parts.forEach((blk, i) => {
+          const lines = blk.split('\n');
+          const header = lines.shift().trim();
+          const title = header.replace(/^Chapter\s+\d+[:\-]\s*/i, '').trim() || `Chapter ${i + 1}`;
+          const body = lines.join('\n').trim();
+          const pages = body ? body.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean) : [''];
+          ebookData.chapters.push({ title, pages });
+        });
+
+        if (!ebookData.title) ebookData.title = firstLine || 'Imported E-book';
+        return ebookData;
+      }
+
+      async function parseDocxToEbook(arrayBuffer) {
+        // Try Markdown
+        const md = await mammoth.convertToMarkdown({ arrayBuffer });
+        const markdown = (md && md.value) || '';
+        if (/^#\s+/m.test(markdown)) {
+          const parsed = smartParseMarkdown(markdown);
+          if (parsed.chapters.length || parsed.title) return parsed;
+        }
+
+        // Try HTML
+        const htmlRes = await mammoth.convertToHtml({ arrayBuffer });
+        const html = (htmlRes && htmlRes.value) || '';
+        if (html) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          const h1s = Array.from(tmp.querySelectorAll('h1'));
+          if (h1s.length) {
+            const ebookData = { title: '', chapters: [] };
+            ebookData.title = h1s.shift().textContent.trim() || 'Imported E-book';
+            let cursor = tmp.firstChild;
+
+            function collectUntil(nextH1) {
+              const buf = [];
+              while (cursor && cursor !== nextH1) {
+                if (cursor.outerHTML) buf.push(cursor.outerHTML);
+                cursor = cursor.nextSibling;
+              }
+              return buf.join('\n');
+            }
+
+            h1s.forEach((h1, idx) => {
+              while (cursor && cursor !== h1) cursor = cursor.nextSibling;
+              if (cursor === h1) cursor = cursor.nextSibling;
+              const title = h1.textContent.trim() || `Chapter ${idx + 1}`;
+              const bodyHtml = collectUntil(h1s[idx + 1] || null);
+              const text = bodyHtml.replace(/<[^>]+>/g, '\n');
+              const pages = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+              ebookData.chapters.push({ title, pages: pages.length ? pages : [''] });
+            });
+
+            if (ebookData.chapters.length) return ebookData;
+          }
+        }
+
+        // Last resort: raw text
+        const textRes = await mammoth.extractRawText({ arrayBuffer });
+        return smartParsePlainText((textRes && textRes.value) || '');
+      }
+
+      // ---------- File upload handler ----------
+      async function handleFileUpload(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const ok = await loadMammoth();
+        if (!ok) {
+          console.error('Mammoth not loaded after all fallbacks.');
+          alert('Could not load the Word parser. Serve via http://localhost and check internet/CSP.');
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const arrayBuffer = e.target.result;
+          try {
+            const ebookData = await parseDocxToEbook(arrayBuffer);
+            console.log('[parsed ebookData]', ebookData);
+
+            resetForm();
+            titleInput.value = ebookData.title || '';
+            renderForm(ebookData);
+
+            editorTitle.textContent = 'Editing Content from Word File';
+            alert(`Imported "${ebookData.title || '(Untitled)'}" with ${ebookData.chapters.length} chapters. Review & Save.`);
+          } catch (error) {
+            console.error('Error converting .docx:', error);
+            alert('Could not process the Word document.');
+          } finally {
+            event.target.value = '';
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      // ---------- API ----------
+      async function fetchEbooks() {
+        try {
+          const response = await fetch(API_URL);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const ebooks = await response.json();
+          ebookList.innerHTML = '';
+          (ebooks || []).forEach(ebook => ebookList.appendChild(shapeListItemEl(ebook)));
+        } catch (error) {
+          console.error('Failed to fetch ebooks:', error);
+        }
+      }
+
+      async function handleSave(event) {
+        event.preventDefault();
+        const data = getFormData();
+        if (!data.title) return alert('Title is required.');
+
+        const method = currentEbookId ? 'PUT' : 'POST';
+        const url = currentEbookId ? `${API_URL}/${currentEbookId}` : API_URL;
+
+        try {
+          const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          if (!response.ok) throw new Error(`Save failed: HTTP ${response.status}`);
+          alert('E-book saved successfully!');
+          resetForm();
+          fetchEbooks();
+        } catch (error) {
+          console.error('Save failed:', error);
+          alert('Error: Could not save e-book.');
+        }
+      }
+
+      async function handleDelete() {
+        if (!currentEbookId || !confirm('Are you sure?')) return;
+        try {
+          const response = await fetch(`${API_URL}/${currentEbookId}`, { method: 'DELETE' });
+          if (!response.ok) throw new Error(`Delete failed: HTTP ${response.status}`);
+          alert('E-book deleted.');
+          resetForm();
+          fetchEbooks();
+        } catch (error) {
+          console.error('Delete failed:', error);
+          alert('Error: Could not delete e-book.');
+        }
+      }
+
+      // ---------- Renderers ----------
+      function renderForm(ebook) {
+        titleInput.value = ebook.title || '';
+        descriptionInput.value = ebook.description || '';
+        imageInput.value = ebook.image || '';
+        chaptersContainer.innerHTML = '';
+        (ebook.chapters || []).forEach((chapter, chapterIndex) => {
+          addChapterToDOM(chapter, chapterIndex);
+        });
+      }
+
+      function selectEbook(ebook) {
+        currentEbookId = ebook.id || null;
+        editorTitle.textContent = currentEbookId ? `Editing: ${ebook.title}` : 'Create New E-book';
+        renderForm(ebook);
+        deleteBtn.hidden = !currentEbookId;
+        document.querySelectorAll('.ebook-item').forEach(item => {
+          item.classList.toggle('active', item.dataset.id === (ebook.id || ''));
+        });
+      }
+
+      function resetForm() {
+        currentEbookId = null;
+        editorTitle.textContent = 'Create New E-book';
+        ebookForm.reset();
+        chaptersContainer.innerHTML = '';
+        deleteBtn.hidden = true;
+        document.querySelectorAll('.ebook-item.active').forEach(item => item.classList.remove('active'));
+      }
+
+      function addChapterToDOM(chapter = { title: '', pages: [''] }, chapterIndex) {
+        const chapterDiv = document.createElement('div');
+        chapterDiv.className = 'chapter-block';
+        chapterDiv.dataset.chapterIndex = chapterIndex;
+
+        chapterDiv.innerHTML = `
+          <h3>Chapter ${chapterIndex + 1}</h3>
+          <button type="button" class="btn-remove remove-chapter-btn" title="Remove chapter">X</button>
+          <div class="form-group">
+            <label>Chapter Title</label>
+            <input type="text" class="chapter-title" value="${chapter.title ? escapeHtml(chapter.title) : ''}">
+          </div>
+          <div class="pages-container"></div>
+          <button type="button" class="btn btn-secondary add-page-btn">Add Page</button>
+        `;
+
+        const pagesContainer = chapterDiv.querySelector('.pages-container');
+        (chapter.pages && chapter.pages.length ? chapter.pages : ['']).forEach((page, pageIndex) => {
+          addPageToDOM(pagesContainer, page, pageIndex);
+        });
+
+        chaptersContainer.appendChild(chapterDiv);
+      }
+
+      function addPageToDOM(pagesContainer, page = '', pageIndex) {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'page-block form-group';
+        pageDiv.dataset.pageIndex = pageIndex;
+        pageDiv.innerHTML = `
+          <label>Page ${pageIndex + 1}</label>
+          <button type="button" class="btn-remove remove-page-btn" title="Remove page">X</button>
+          <textarea class="page-content" rows="5">${escapeHtml(page)}</textarea>
+        `;
+        pagesContainer.appendChild(pageDiv);
+      }
+
+      function getFormData() {
+        const chapters = [];
+        document.querySelectorAll('.chapter-block').forEach(chapterDiv => {
+          const title = chapterDiv.querySelector('.chapter-title').value;
+          const pages = [];
+          chapterDiv.querySelectorAll('.page-content').forEach(pageTextarea => pages.push(pageTextarea.value));
+          chapters.push({ title, pages });
+        });
+        return {
+          title: titleInput.value,
+          description: descriptionInput.value,
+          image: imageInput.value,
+          chapters
+        };
+      }
+
+      function escapeHtml(str) {
+        return (str || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      // ---------- Events ----------
+      chaptersContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('remove-chapter-btn')) {
+          e.target.closest('.chapter-block').remove();
+          document.querySelectorAll('.chapter-block').forEach((block, idx) => {
+            const h = block.querySelector('h3');
+            if (h) h.textContent = `Chapter ${idx + 1}`;
+          });
+        }
+        if (e.target.classList.contains('add-page-btn')) {
+          const pagesContainer = e.target.closest('.chapter-block').querySelector('.pages-container');
+          const nextIndex = pagesContainer.querySelectorAll('.page-block').length;
+          addPageToDOM(pagesContainer, '', nextIndex);
+        }
+        if (e.target.classList.contains('remove-page-btn')) {
+          const pageBlock = e.target.closest('.page-block');
+          const pagesContainer = pageBlock.parentElement;
+          pageBlock.remove();
+          pagesContainer.querySelectorAll('.page-block').forEach((p, idx) => {
+            const lbl = p.querySelector('label');
+            if (lbl) lbl.textContent = `Page ${idx + 1}`;
+          });
+        }
+      });
+
+      document.getElementById('add-chapter-btn').addEventListener('click', () => {
+        addChapterToDOM({ title: '', pages: [''] }, document.querySelectorAll('.chapter-block').length);
+      });
+
+      document.getElementById('new-ebook-btn').addEventListener('click', resetForm);
+      ebookForm.addEventListener('submit', handleSave);
+      deleteBtn.addEventListener('click', handleDelete);
+      wordFileInput.addEventListener('change', handleFileUpload);
+
+      // Init
+      fetchEbooks();
+    });
+  </script>
+</body>
+</html>

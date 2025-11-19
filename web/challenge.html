@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Challenge Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">30-Day Challenge Admin</h1>
+            <p class="text-gray-600">Manage the content for your self-improvement app.</p>
+        </header>
+
+        <!-- Section to Add a New Challenge -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 class="text-2xl font-semibold mb-4">Add New Challenge</h2>
+            <form id="addChallengeForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="day" class="block text-sm font-medium text-gray-700">Day (Number)</label>
+                        <input type="number" id="day" name="day" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+                        <input type="text" id="title" name="title" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea id="description" name="description" rows="3" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+                </div>
+                 <div>
+                    <label for="img" class="block text-sm font-medium text-gray-700">Image URL</label>
+                    <input type="url" id="img" name="img" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="link" class="block text-sm font-medium text-gray-700">External Link (Optional)</label>
+                    <input type="url" id="link" name="link" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button type="submit" class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Add Challenge
+                </button>
+            </form>
+        </div>
+
+        <!-- Section to Display All Challenges -->
+        <div>
+            <h2 class="text-2xl font-semibold mb-4">Current Challenges</h2>
+            <div id="challengeList" class="space-y-3">
+                <!-- Challenges will be loaded here dynamically -->
+                <p id="loadingMessage">Loading challenges...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Make sure this port matches the port your Node.js API server is running on.
+        const API_BASE_URL = 'http://localhost:4000/api';
+
+        const challengeList = document.getElementById('challengeList');
+        const addChallengeForm = document.getElementById('addChallengeForm');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        // --- FETCH AND DISPLAY ALL CHALLENGES ---
+        const fetchChallenges = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/challenges`);
+                if (!response.ok) {
+                    // Handle non-JSON 404 responses gracefully
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                const challenges = await response.json();
+
+                challengeList.innerHTML = ''; // Clear the list before rendering
+
+                if (challenges.length === 0) {
+                    challengeList.innerHTML = '<p class="text-gray-500">No challenges found. Add one above!</p>';
+                    return;
+                }
+
+                challenges.forEach(challenge => {
+                    const challengeElement = document.createElement('div');
+                    challengeElement.className = 'bg-white p-4 rounded-lg shadow-sm flex items-center justify-between';
+                    challengeElement.innerHTML = `
+                        <div class="flex items-center">
+                            <img src="${challenge.img}" alt="${challenge.title}" class="w-12 h-12 rounded-md object-cover mr-4">
+                            <div>
+                                <p class="font-semibold text-gray-900">Day ${challenge.day}: ${challenge.title}</p>
+                                <p class="text-sm text-gray-500">${challenge.description.substring(0, 50)}...</p>
+                            </div>
+                        </div>
+                        <button onclick="deleteChallenge('${challenge.id}')" class="text-red-500 hover:text-red-700 font-semibold">Delete</button>
+                    `;
+                    challengeList.appendChild(challengeElement);
+                });
+
+            } catch (error) {
+                console.error('Failed to fetch challenges:', error);
+                challengeList.innerHTML = '<p class="text-red-500">Error: Could not load challenges. Is the API server running?</p>';
+            }
+        };
+
+        // --- ADD A NEW CHALLENGE ---
+        addChallengeForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const formData = new FormData(addChallengeForm);
+            const challengeData = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/challenges`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(challengeData),
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create challenge.');
+                }
+                
+                addChallengeForm.reset(); // Clear the form
+                fetchChallenges(); // Refresh the list
+
+            } catch (error) {
+                console.error('Error adding challenge:', error);
+                alert('Could not add challenge. Please check the console for errors.');
+            }
+        });
+
+        // --- DELETE A CHALLENGE ---
+        const deleteChallenge = async (challengeId) => {
+            if (!confirm('Are you sure you want to delete this challenge?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/challenges/${challengeId}`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete challenge.');
+                }
+
+                fetchChallenges(); // Refresh the list
+
+            } catch (error) {
+                console.error('Error deleting challenge:', error);
+                alert('Could not delete challenge. Please check the console for errors.');
+            }
+        };
+
+        // --- INITIAL LOAD ---
+        document.addEventListener('DOMContentLoaded', fetchChallenges);
+    </script>
+</body>
+</html>
+

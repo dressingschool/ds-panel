@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Popup Dashboard</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f4f7f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      color: #333;
+    }
+    .container {
+      background-color: #ffffff;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 600px;
+    }
+    h2 {
+      text-align: center;
+      color: #1a1a1a;
+      margin-bottom: 30px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    input[type="text"],
+    input[type="url"],
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #dcdcdc;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #007AFF;
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+    }
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+    }
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 15px;
+      background-color: #007AFF;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #response-message {
+      text-align: center;
+      margin-top: 20px;
+      font-weight: 500;
+      height: 20px;
+    }
+    .success { color: #28a745; }
+    .error { color: #dc3545; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>📱 App Popup Controller</h2>
+    <form id="popup-form">
+      
+      <div class="form-group toggle-switch">
+        <label for="showPopup">Activate Popup in App</label>
+        <input type="checkbox" id="showPopup" name="showPopup">
+      </div>
+      
+      <div class="form-group">
+        <label for="imageUrl">Image URL</label>
+        <input type="url" id="imageUrl" name="imageUrl" placeholder="https://example.com/image.png" required>
+      </div>
+
+      <div class="form-group">
+        <label for="heading">Heading</label>
+        <input type="text" id="heading" name="heading" placeholder="New Styles Arrived!" required>
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" placeholder="Check out our latest collection and get a discount." required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="buttonText">Button Text</label>
+        <input type="text" id="buttonText" name="buttonText" placeholder="Shop Now" required>
+      </div>
+
+      <button type="submit">Save & Update</button>
+    </form>
+    <div id="response-message"></div>
+  </div>
+
+<script>
+  const form = document.getElementById('popup-form');
+  const responseMessage = document.getElementById('response-message');
+  const API_ENDPOINT = '/api/popup';
+
+  /**
+   * 1. FETCH & POPULATE
+   * Fetches the current popup settings from the server when the page loads.
+   */
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      const response = await fetch(API_ENDPOINT);
+      if (!response.ok) {
+        throw new Error('Could not connect to the server.');
+      }
+      const data = await response.json();
+
+      if (data) {
+        document.getElementById('showPopup').checked = data.showPopup;
+        document.getElementById('imageUrl').value = data.imageUrl || '';
+        document.getElementById('heading').value = data.heading || '';
+        document.getElementById('description').value = data.description || '';
+        document.getElementById('buttonText').value = data.buttonText || '';
+      }
+    } catch (error) {
+      responseMessage.className = 'error';
+      responseMessage.textContent = 'Error: Could not load configuration.';
+      console.error('Fetch error:', error);
+    }
+  });
+
+  /**
+   * 2. SUBMIT & UPDATE
+   * Sends the form data to the server when the user clicks "Save".
+   */
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = {
+      showPopup: document.getElementById('showPopup').checked,
+      imageUrl: document.getElementById('imageUrl').value,
+      heading: document.getElementById('heading').value,
+      description: document.getElementById('description').value,
+      buttonText: document.getElementById('buttonText').value,
+    };
+
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Server responded with an error.');
+      }
+
+      responseMessage.className = 'success';
+      responseMessage.textContent = '✅ Configuration saved successfully!';
+
+    } catch (error) {
+      responseMessage.className = 'error';
+      responseMessage.textContent = '❌ Failed to save. Please try again.';
+      console.error('Submit error:', error);
+    }
+
+    setTimeout(() => {
+      responseMessage.textContent = '';
+    }, 3000);
+  });
+</script>
+
+</body>
+</html>

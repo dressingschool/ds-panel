@@ -844,6 +844,540 @@ app.get('/api/test', async (_req, res) => {
 });
 app.get('/api/health', (_req, res) => res.json({ ok: true, now: new Date().toISOString() }));
 
+// In server/index.js
+
+const verifyAccessToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1]; // Expects "Bearer TOKEN"
+
+  if (!token) {
+    return res.status(401).json({ ok: false, error: 'Access token is required' });
+  }
+
+  if (token === process.env.ACCESS_TOKEN) {
+    next(); // Token is valid, proceed
+  } else {
+    return res.status(403).json({ ok: false, error: 'Invalid access token' });
+  }
+};
+// ---------- LIST ALL GROUPS (sorted by document order) ----------
+app.get('/api/basics', async (_req, res) => {
+  try {
+    // 1.  ALWAYS try to sort by the numeric 'order' field
+    const snap = await db.collection('basics')
+                         .orderBy('order', 'asc')
+                         .get();
+
+    // 2.  Map to plain objects
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(data);
+  } catch (e) {
+    console.error('Fetch failed:', e);
+    res.status(500).json({ error: 'Fetch failed' });
+  }
+});
+
+// ---------- GET A SINGLE GROUP BY ID ----------
+app.get('/api/basics/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const doc = await db.collection('basics').doc(groupId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Document not found' });
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (e) {
+    console.error('Fetch single document error:', e);
+    res.status(500).json({ error: 'Failed to fetch document' });
+  }
+});
+
+// ---------- UPDATE ONLY THE DOCUMENT’S ORDER (NEW) ----------
+app.put('/api/basics/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { order } = req.body;
+
+    if (typeof order !== 'number') {
+      return res.status(400).json({ error: '"order" must be a number' });
+    }
+
+    const ref = db.collection('basics').doc(groupId);
+    await ref.set({ order }, { merge: true });   // creates doc if missing
+
+    const fresh = await ref.get();
+    res.json({ id: fresh.id, ...fresh.data() });
+  } catch (e) {
+    console.error('UPDATE DOCUMENT ERROR', e);
+    res.status(500).json({ error: 'Document update failed' });
+  }
+});
+
+// ---------- CREATE ITEM AND SET DOCUMENT ORDER ----------
+app.post('/api/basics/:groupId/items', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const body = req.body;
+
+    // 1.  Split document-level vs item-level data
+    const docOrder = (body.order !== undefined) ? Number(body.order) : undefined;
+    const itemData = { ...body };
+    delete itemData.order;               // keep items clean
+
+    // 2.  Ensure the item has an id
+    if (!itemData.id) itemData.id = Date.now().toString();
+
+    const groupRef = db.collection('basics').doc(groupId);
+
+    // 3.  Set / create the document with its order (if supplied)
+    if (docOrder !== undefined) {
+      await groupRef.set({ order: docOrder }, { merge: true });
+    } else {
+      await groupRef.set({}, { merge: true });   // create blank doc if missing
+    }
+
+    // 4.  Push the item into the items array
+    await groupRef.update({
+      items: admin.firestore.FieldValue.arrayUnion(itemData)
+    });
+
+    res.status(201).json(itemData);
+  } catch (e) {
+    console.error('CREATE ERROR', e);
+    res.status(500).json({ error: 'Create failed' });
+  }
+});
+
+// ---------- UPDATE A SPECIFIC ITEM WITHIN A DOCUMENT ----------
+app.put('/api/basics/:groupId/items/:itemId', async (req, res) => {
+  try {
+    const { groupId, itemId } = req.params;
+    const ref = db.collection('basics').doc(groupId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Group not found' });
+
+    let items = doc.data().items || [];
+    const idx = items.findIndex(i => i.id === itemId);
+    if (idx === -1) return res.status(404).json({ error: 'Item not found' });
+
+    items[idx] = { ...items[idx], ...req.body };   // merge update
+    await ref.update({ items });
+    res.json(items[idx]);
+  } catch (e) {
+    console.error('UPDATE ITEM ERROR', e);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+// ---------- DELETE AN ITEM FROM A DOCUMENT'S ARRAY ----------
+app.delete('/api/basics/:groupId/items/:itemId', async (req, res) => {
+  try {
+    const { groupId, itemId } = req.params;
+    const ref = db.collection('basics').doc(groupId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Group not found' });
+
+    const items = (doc.data().items || []).filter(i => i.id !== itemId);
+    await ref.update({ items });
+    res.json({ success: true, deletedItemId: itemId });
+  } catch (e) {
+    console.error('DELETE ERROR', e);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+
+// ---------- LIST ALL GROUPS (sorted by document order) ----------
+app.get('/api/recreate', async (_req, res) => {
+  try {
+    // 1.  ALWAYS try to sort by the numeric 'order' field
+    const snap = await db.collection('recreate')
+                         .orderBy('order', 'asc')
+                         .get();
+
+    // 2.  Map to plain objects
+    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.json(data);
+  } catch (e) {
+    console.error('Fetch failed:', e);
+    res.status(500).json({ error: 'Fetch failed' });
+  }
+});
+
+// ---------- GET A SINGLE GROUP BY ID ----------
+app.get('/api/recreate/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const doc = await db.collection('recreate').doc(groupId).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Document not found' });
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (e) {
+    console.error('Fetch single document error:', e);
+    res.status(500).json({ error: 'Failed to fetch document' });
+  }
+});
+
+// ---------- UPDATE ONLY THE DOCUMENT’S ORDER (NEW) ----------
+app.put('/api/recreate/:groupId', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { order } = req.body;
+
+    if (typeof order !== 'number') {
+      return res.status(400).json({ error: '"order" must be a number' });
+    }
+
+    const ref = db.collection('recreate').doc(groupId);
+    await ref.set({ order }, { merge: true });   // creates doc if missing
+
+    const fresh = await ref.get();
+    res.json({ id: fresh.id, ...fresh.data() });
+  } catch (e) {
+    console.error('UPDATE DOCUMENT ERROR', e);
+    res.status(500).json({ error: 'Document update failed' });
+  }
+});
+
+// ---------- CREATE ITEM AND SET DOCUMENT ORDER ----------
+app.post('/api/recreate/:groupId/items', async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const body = req.body;
+
+    // 1.  Split document-level vs item-level data
+    const docOrder = (body.order !== undefined) ? Number(body.order) : undefined;
+    const itemData = { ...body };
+    delete itemData.order;               // keep items clean
+
+    // 2.  Ensure the item has an id
+    if (!itemData.id) itemData.id = Date.now().toString();
+
+    const groupRef = db.collection('recreate').doc(groupId);
+
+    // 3.  Set / create the document with its order (if supplied)
+    if (docOrder !== undefined) {
+      await groupRef.set({ order: docOrder }, { merge: true });
+    } else {
+      await groupRef.set({}, { merge: true });   // create blank doc if missing
+    }
+
+    // 4.  Push the item into the items array
+    await groupRef.update({
+      items: admin.firestore.FieldValue.arrayUnion(itemData)
+    });
+
+    res.status(201).json(itemData);
+  } catch (e) {
+    console.error('CREATE ERROR', e);
+    res.status(500).json({ error: 'Create failed' });
+  }
+});
+
+// ---------- UPDATE A SPECIFIC ITEM WITHIN A DOCUMENT ----------
+app.put('/api/recreate/:groupId/items/:itemId', async (req, res) => {
+  try {
+    const { groupId, itemId } = req.params;
+    const ref = db.collection('recreate').doc(groupId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Group not found' });
+
+    let items = doc.data().items || [];
+    const idx = items.findIndex(i => i.id === itemId);
+    if (idx === -1) return res.status(404).json({ error: 'Item not found' });
+
+    items[idx] = { ...items[idx], ...req.body };   // merge update
+    await ref.update({ items });
+    res.json(items[idx]);
+  } catch (e) {
+    console.error('UPDATE ITEM ERROR', e);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+// ---------- DELETE AN ITEM FROM A DOCUMENT'S ARRAY ----------
+app.delete('/api/recreate/:groupId/items/:itemId', async (req, res) => {
+  try {
+    const { groupId, itemId } = req.params;
+    const ref = db.collection('recreate').doc(groupId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Group not found' });
+
+    const items = (doc.data().items || []).filter(i => i.id !== itemId);
+    await ref.update({ items });
+    res.json({ success: true, deletedItemId: itemId });
+  } catch (e) {
+    console.error('DELETE ERROR', e);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+
+// 1. GET ALL INSTAGRAM ACCOUNTS
+// Fetches all documents from the 'igaccount' collection
+app.get('/api/igaccount', async (req, res) => {
+  try {
+    const snapshot = await db.collection('igaccount').orderBy('name', 'asc').get();
+    if (snapshot.empty) {
+      return res.json([]);
+    }
+    const accounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.status(200).json(accounts);
+  } catch (error) {
+    console.error('Error fetching accounts:', error);
+    res.status(500).json({ error: 'Failed to fetch accounts.' });
+  }
+});
+
+// 2. CREATE A NEW INSTAGRAM ACCOUNT
+// Adds a new document to the 'igaccount' collection
+app.post('/api/igaccount', async (req, res) => {
+  try {
+    const { name, username, bio, avatar, link } = req.body;
+
+    // Basic validation
+    if (!name || !username || !link) {
+      return res.status(400).json({ error: 'Missing required fields: name, username, link.' });
+    }
+
+    const newAccount = { name, username, bio, avatar, link };
+    const docRef = await db.collection('igaccount').add(newAccount);
+
+    res.status(201).json({ id: docRef.id, ...newAccount });
+  } catch (error) {
+    console.error('Error creating account:', error);
+    res.status(500).json({ error: 'Failed to create account.' });
+  }
+});
+
+// 3. DELETE AN INSTAGRAM ACCOUNT
+// Deletes a document by its ID
+app.delete('/api/igaccount/:accountId', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const docRef = db.collection('igaccount').doc(accountId);
+
+    const doc = await docRef.get();
+    if (!doc.exists) {
+        return res.status(404).json({ error: 'Account not found.' });
+    }
+
+    await docRef.delete();
+    res.status(200).json({ success: true, message: `Deleted account ${accountId}` });
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({ error: 'Failed to delete account.' });
+  }
+});
+
+// 1. GET ALL CHALLENGES
+// Fetches all documents from the 'challenges' collection, ordered by day.
+app.get('/api/challenges', async (req, res) => {
+  try {
+    const snapshot = await db.collection('challenges').orderBy('day', 'asc').get();
+    if (snapshot.empty) {
+      // If no challenges are found, return an empty array.
+      return res.json([]);
+    }
+    // Map over the documents to create a clean array of challenge objects.
+    const challenges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.status(200).json(challenges);
+  } catch (error) {
+    console.error('Error fetching challenges:', error);
+    res.status(500).json({ error: 'Failed to fetch challenges.' });
+  }
+});
+
+// 2. CREATE A NEW CHALLENGE
+// Adds a new document to the 'challenges' collection.
+app.post('/api/challenges', async (req, res) => {
+  try {
+    const { day, title, description, img, link } = req.body;
+
+    // Basic validation to ensure required fields are present.
+    if (!day || !title || !description || !img) {
+      return res.status(400).json({ error: 'Missing required fields: day, title, description, img.' });
+    }
+
+    // Create the new challenge object. The link is optional.
+    const newChallenge = { 
+      day: Number(day), // Ensure day is a number
+      title, 
+      description, 
+      img, 
+      link: link || null 
+    };
+    
+    const docRef = await db.collection('challenges').add(newChallenge);
+
+    res.status(201).json({ id: docRef.id, ...newChallenge });
+  } catch (error) {
+    console.error('Error creating challenge:', error);
+    res.status(500).json({ error: 'Failed to create challenge.' });
+  }
+});
+
+// 3. DELETE A CHALLENGE
+// Deletes a challenge document by its Firestore document ID.
+app.delete('/api/challenges/:challengeId', async (req, res) => {
+  try {
+    const { challengeId } = req.params;
+    const docRef = db.collection('challenges').doc(challengeId);
+
+    const doc = await docRef.get();
+    if (!doc.exists) {
+        // If the document doesn't exist, return a 404 error.
+        return res.status(404).json({ error: 'Challenge not found.' });
+    }
+
+    await docRef.delete();
+    res.status(200).json({ success: true, message: `Deleted challenge ${challengeId}` });
+  } catch (error) {
+    console.error('Error deleting challenge:', error);
+    res.status(500).json({ error: 'Failed to delete challenge.' });
+  }
+});
+
+// ===================================================
+//                 API ROUTES 🚀
+// ===================================================
+const POPUP_DOC_ID = 'mainPopupConfig';
+
+// GET POPUP CONFIGURATION
+// Fetches the current popup settings from Firestore.
+app.get('/api/popup', async (req, res) => {
+  try {
+    const docRef = db.collection('popups').doc(POPUP_DOC_ID);
+    const doc = await docRef.get(); // Correctly fetches the document
+
+    if (!doc.exists) {
+      // If no config exists yet, return a default "off" state.
+      return res.status(200).json({
+        id: POPUP_DOC_ID,
+        showPopup: false,
+        imageUrl: '',
+        heading: '',
+        description: '',
+        buttonText: ''
+      });
+    }
+    // If the document exists, send its data
+    res.status(200).json({ id: doc.id, ...doc.data() });
+  } catch (error) {
+    console.error('Error fetching popup configuration:', error);
+    res.status(500).json({ error: 'Failed to fetch popup configuration.' });
+  }
+});
+
+// CREATE OR UPDATE POPUP CONFIGURATION
+// Saves the dashboard form data to Firestore.
+app.post('/api/popup', async (req, res) => {
+  try {
+    const { showPopup, imageUrl, heading, description, buttonText } = req.body;
+    
+    // Basic validation
+    if (typeof showPopup !== 'boolean') {
+      return res.status(400).json({ error: 'Missing or invalid fields.' });
+    }
+    
+    const popupConfig = {
+      showPopup,
+      imageUrl,
+      heading,
+      description,
+      buttonText,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    const docRef = db.collection('popups').doc(POPUP_DOC_ID);
+    // Using .set() with { merge: true } creates the doc if it doesn't exist,
+    // or updates it if it does.
+    await docRef.set(popupConfig, { merge: true });
+    
+    res.status(200).json({ id: POPUP_DOC_ID, ...popupConfig });
+  } catch (error) {
+    console.error('Error updating popup configuration:', error);
+    res.status(500).json({ error: 'Failed to update popup configuration.' });
+  }
+});
+
+
+// 1) LIST
+app.get('/api/ebooks', async (req, res) => {
+  try {
+    const snap = await db.collection(COL_EBOOKS).orderBy('createdAt', 'desc').get();
+    const items = snap.docs.map(shapeEbookDoc);
+    res.json(items);
+  } catch (e) {
+    console.error('Error fetching ebooks:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// 2) GET one
+app.get('/api/ebooks/:id', async (req, res) => {
+  try {
+    const ref = db.collection(COL_EBOOKS).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ ok: false, error: 'E-book not found' });
+    res.json(shapeEbookDoc(snap));
+  } catch (e) {
+    console.error('Error fetching ebook:', e);
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// 3) CREATE
+app.post('/api/ebooks', async (req, res) => {
+  console.log('--- E-BOOK CREATE REQUEST RECEIVED ---');
+  try {
+    console.log('Request Body:', JSON.stringify(req.body, null, 2));
+    const payload = sanitizeEbook(req.body);
+    console.log('Sanitized Payload:', JSON.stringify(payload, null, 2));
+
+    if (!payload.title) {
+      console.log('Validation failed: Title is missing.');
+      return res.status(400).json({ ok: false, error: 'Title is required' });
+    }
+
+    payload.createdAt = admin.firestore.FieldValue.serverTimestamp();
+    const ref = await db.collection(COL_EBOOKS).add(payload);
+    const snap = await ref.get();
+
+    console.log(`✅ Created ebook ID: ${ref.id}`);
+    res.status(201).json(shapeEbookDoc(snap));
+  } catch (e) {
+    console.error('❌ SERVER ERROR creating ebook:', e);
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// 4) UPDATE
+app.put('/api/ebooks/:id', async (req, res) => {
+  try {
+    const ref = db.collection(COL_EBOOKS).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ ok: false, error: 'E-book not found' });
+
+    const payload = sanitizeEbook(req.body);
+    await ref.set(payload, { merge: true });
+
+    const snap = await ref.get();
+    res.json(shapeEbookDoc(snap));
+  } catch (e) {
+    console.error('Error updating ebook:', e);
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// 5) DELETE
+app.delete('/api/ebooks/:id', async (req, res) => {
+  try {
+    await db.collection(COL_EBOOKS).doc(req.params.id).delete();
+    res.json({ ok: true, id: req.params.id, message: 'E-book deleted' });
+  } catch (e) {
+    console.error('Error deleting ebook:', e);
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
 
 /* ───────────────────────────────
    Start
